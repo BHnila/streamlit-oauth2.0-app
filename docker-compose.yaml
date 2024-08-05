@@ -3,8 +3,6 @@ services:
   keycloak:
       image: keycloak/keycloak:25.0
       container_name: keycloak
-      ports:
-        - 3000:8080
       environment:
         - DB_VENDOR=postgres
         - DB_ADDR=postgres
@@ -18,37 +16,62 @@ services:
         - KC_DB_USERNAME=keycloak
         - KC_DB_PASSWORD=keycloakdbpass
         - KEYCLOAK_IMPORT=/tmp/realm-test.json
+      ports:
+        - 3000:8080
+      expose:
+        - "8080"
       volumes:
       - ./setup/:/opt/keycloak/data/import
       depends_on:
         - postgres
+      networks:
+      - app-network
       command: 
         - start-dev
         - --import-realm
 
+
   postgres:
       image: postgres:16.3-alpine3.20
       container_name: postgres
-      expose:
-        - "5432"
       environment:
         - POSTGRES_DB=keycloakdb
         - POSTGRES_USER=keycloak
         - POSTGRES_PASSWORD=keycloakdbpass
+      expose:
+        - "5432"
       volumes:
         - postgres:/var/lib/postgresql/data
+      networks:
+      - app-network
+
 
   streamlit_app:
     build: ./streamlit_app/
-    depends_on:
-      - keycloak
-      - postgres
-    env_file:
-      - .env
+    container_name: streamlit_app
+    environment:
+      - AUTHORIZE_URL=http://localhost:3000/realms/test/protocol/openid-connect/auth
+      - TOKEN_URL=http://keycloak:8080/realms/test/protocol/openid-connect/token
+      - REFRESH_TOKEN_URL=http://keycloak:8080/realms/test/protocol/openid-connect/token
+      - REVOKE_TOKEN_URL=http://keycloak:8080/realms/test/protocol/openid-connect/revoke
+      - CLIENT_ID=test_client
+      - CLIENT_SECRET=6fLF6yvAUm9bzrxiDgMfIC4VOIfT9gep
+      - REDIRECT_URI=http://localhost:8501
+      - SCOPE=openid email profile
     ports:
       - 8501:8501
     expose:
       - "8501"
+    depends_on:
+      - keycloak
+      - postgres
+    networks:
+      - app-network
+
 
 volumes:
   postgres:
+
+networks:
+  app-network:
+    driver: bridge
